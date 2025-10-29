@@ -1,0 +1,77 @@
+REM [003][FILE_LOAD]
+@ECHO OFF
+
+REM ログフォルダ作成
+IF NOT EXIST %~DP0..\logs MKDIR %~DP0..\logs
+
+REM コマンドフォルダ作成
+IF NOT EXIST %~DP0..\cmd MKDIR %~DP0..\cmd
+
+REM ログファイルの情報
+SET OUTFILE=%~DP0../logs/setup.log
+SET OUTTIME=%~DP0../logs/time.log
+
+REM ベースフォルダ
+SET BASEDIR=%~DP0..
+
+REM 更新対象の情報
+SET INFOSCRIPT=%~DP0..\cmd\%~N0.DB2
+
+SET MSG=%DATE% %TIME% TRUNCATE INAIN.A11T501
+ECHO %MSG%
+>> %OUTFILE% ECHO %MSG%
+"%MYSQLPATH%mysql" %OPTION% -h %HOST% %DB_NAME% -u %USER_ID% --show-warnings -vv -e "TRUNCATE TABLE INAIN.A11T501 ;commit;">>%OUTFILE% 2>&1
+IF NOT %ERRORLEVEL%==0 GOTO ERROR
+
+rem ファイルパスの設定
+SET INFILENAME=0461
+set filename=DATA\%INFILENAME%
+set filename_tmp=%filename:\=\\%
+
+SET MSG=%DATE% %TIME% %INFILENAME% → INAIN.A11T501 LOAD処理
+ECHO %MSG%
+
+"%MYSQLPATH%mysql" %OPTION% -h %HOST% %DB_NAME% -u %USER_ID% --show-warnings -vv -e "TRUNCATE TABLE INAIN.A11T501_01 ;commit;">>%OUTFILE% 2>&1
+IF NOT %ERRORLEVEL%==0 GOTO ERROR
+
+>> %OUTFILE% ECHO %MSG%
+"%MYSQLPATH%mysql" %OPTION% -h %HOST% %DB_NAME% -u %USER_ID% --local_infile=1 --show-warnings -vv -e "load data local infile '%filename_tmp%' IGNORE into table INAIN.A11T501_01 character set cp932 fields terminated by ',' ESCAPED BY '' lines terminated by '\r\n' (@1) SET DATA = @1; commit;" >>%OUTFILE% 2>&1
+
+"%MYSQLPATH%mysql" %OPTION% -h %HOST% %DB_NAME% -u %USER_ID% --show-warnings -vv -e "INSERT ignore INTO  INAIN.A11T501 SELECT MID(DATA, 1, 1) AS SYUGETSU_FLG, MID(DATA, 2, 4) AS NENGETU, MID(DATA, 6, 3) AS TENPO, MID(DATA, 9, 3) AS BMNCD, MID(DATA, 12, 2) AS DAIBUNCD, MID(DATA, 14, 2) AS CHUBUNCD, MID(DATA, 16, 11) AS HANBAI_TENSU, MID(DATA, 27, 11) AS HANBAI_URIAGE FROM INAIN.A11T501_01;commit "  >>%OUTFILE% 2>&1
+IF NOT %ERRORLEVEL%==0 GOTO ERROR
+
+SET INFILENAME=0679
+set filename=DATA\%INFILENAME%
+set filename_tmp=%filename:\=\\%
+SET MSG=%DATE% %TIME% %INFILENAME% → INAIN.A11T501 LOAD処理
+ECHO %MSG%
+
+
+"%MYSQLPATH%mysql" %OPTION% -h %HOST% %DB_NAME% -u %USER_ID% --show-warnings -vv -e "TRUNCATE TABLE INAIN.A11T501_02 ;commit;">>%OUTFILE% 2>&1
+IF NOT %ERRORLEVEL%==0 GOTO ERROR
+
+>> %OUTFILE% ECHO %MSG%
+"%MYSQLPATH%mysql" %OPTION% -h %HOST% %DB_NAME% -u %USER_ID% --local_infile=1 --show-warnings -vv -e "load data local infile '%filename_tmp%' IGNORE into table INAIN.A11T501_02 character set cp932 fields terminated by ',' ESCAPED BY '' lines terminated by '\r\n' (@1) SET DATA = @1; commit;" >>%OUTFILE% 2>&1
+"%MYSQLPATH%mysql" %OPTION% -h %HOST% %DB_NAME% -u %USER_ID% --show-warnings -vv -e "INSERT ignore INTO INAIN.A11T501 SELECT MID(DATA, 1, 1) AS SYUGETSU_FLG, MID(DATA, 2, 4) AS NENGETU, MID(DATA, 6, 3) AS TENPO, MID(DATA, 9, 3) AS BMNCD, MID(DATA, 12, 2) AS DAIBUNCD, MID(DATA, 14, 2) AS CHUBUNCD, MID(DATA, 16, 11) AS HANBAI_TENSU, MID(DATA, 27, 11) AS HANBAI_URIAGE FROM INAIN.A11T501_02;commit "  >>%OUTFILE% 2>&1
+IF NOT %ERRORLEVEL%==0 GOTO ERROR
+REM IF NOT %ERRORLEVEL%==0 GOTO ERROR
+
+SET MSG=%DATE% %TIME% INATK.TOKJRTPTN DELETE処理
+ECHO %MSG%
+>> %OUTFILE% ECHO %MSG%
+"%MYSQLPATH%mysql" %OPTION% -h %HOST% %DB_NAME% -u %USER_ID% --show-warnings -vv -e  "DELETE FROM INATK.TOKJRTPTN T1 WHERE EXISTS (SELECT 1 FROM INAIN.A11T501 T2 WHERE T1.BMNCD=T2.BMNCD AND T1.WWMMFLG=T2.SYUGETSU_FLG AND T1.YYMM=T2.NENGETU);commit;">>%OUTFILE% 2>&1
+REM IF NOT %ERRORLEVEL%==0 GOTO ERROR
+
+
+SET MSG=%DATE% %TIME% INAIN.A11T501 → INATK.TOKJRTPTN LOAD処理
+ECHO %MSG%
+>> %OUTFILE% ECHO %MSG%
+REM 実績率パターンの作成
+"%MYSQLPATH%mysql" %OPTION% -h %HOST% %DB_NAME% -u %USER_ID% --show-warnings -vv < %~DP0461.LOAD.sql >>%OUTFILE% 2>&1
+IF NOT %ERRORLEVEL%==0 GOTO ERROR
+
+:FINAL
+EXIT /B 0
+
+:ERROR
+EXIT /B 1
