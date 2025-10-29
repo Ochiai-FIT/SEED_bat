@@ -1,0 +1,33 @@
+REM [079][TOKMS]
+@ECHO OFF
+
+REM ログフォルダ作成
+IF NOT EXIST %~DP0..\logs MKDIR %~DP0..\logs
+
+REM コマンドフォルダ作成
+IF NOT EXIST %~DP0..\cmd MKDIR %~DP0..\cmd
+
+REM ログファイルの情報
+SET OUTFILE=%~DP0../logs/setup.log
+SET OUTTIME=%~DP0../logs/time.log
+
+REM ベースフォルダ
+SET BASEDIR=%~DP0..
+
+REM 更新対象の情報
+SET INFOSCRIPT=%~DP0..\cmd\%~N0.DB2
+
+SET MSG=%DATE% %TIME% INATK.TOKMS デリート処理（店別催し送信状況）
+ECHO %MSG%
+>> %OUTFILE% ECHO %MSG%
+
+"%MYSQLPATH%mysql" %OPTION% -h %HOST% %DB_NAME% -u %USER_ID% --show-warnings -vv -e"DELETE FROM INATK.TOKMS WHERE EXISTS (SELECT 1 FROM INAWK.A11TK13 TK13 WHERE TK13.DATAKBN = 1 AND INATK.TOKMS.SMOYSCD = TK13.SMOYSCD);commit;" >>%OUTFILE% 2>&1
+IF %ERRORLEVEL% GTR 1 GOTO ERROR
+"%MYSQLPATH%mysql" %OPTION% -h %HOST% %DB_NAME% -u %USER_ID% --show-warnings -vv -e "ANALYZE TABLE INATK.TOKMS;commit;" >>%OUTFILE% 2>&1
+IF NOT %ERRORLEVEL%==0 GOTO ERROR
+
+:FINAL
+EXIT /B 0
+
+:ERROR
+EXIT /B 1
