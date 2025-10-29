@@ -1,0 +1,61 @@
+REM [003][FILE_LOAD]
+@ECHO OFF
+
+REM ログフォルダ作成
+IF NOT EXIST %~DP0..\logs MKDIR %~DP0..\logs
+
+REM コマンドフォルダ作成
+IF NOT EXIST %~DP0..\cmd MKDIR %~DP0..\cmd
+
+REM ログファイルの情報
+SET OUTFILE=%~DP0../logs/setup.log
+SET OUTTIME=%~DP0../logs/time.log
+
+REM ベースフォルダ
+SET BASEDIR=%~DP0..
+
+REM 更新対象の情報
+SET INFOSCRIPT=%~DP0..\cmd\%~N0.DB2
+
+SET MSG=%DATE% %TIME% TRUNCATE INAIN.AFE01_01
+ECHO %MSG%
+>> %OUTFILE% ECHO %MSG%
+"%MYSQLPATH%mysql" %OPTION% -h %HOST% %DB_NAME% -u %USER_ID% --show-warnings -vv -e"TRUNCATE TABLE INAIN.AFE01_01 ;commit;">>%OUTFILE% 2>&1
+IF NOT %ERRORLEVEL%==0 GOTO ERROR
+
+rem ファイルパスの設定
+SET INFILENAME=0070
+set filename=DATA\%INFILENAME%
+set filename_tmp=%filename:\=\\%
+
+SET MSG=%DATE% %TIME% %INFILENAME% → INAIN.AFE01_01 LOAD処理
+ECHO %MSG%
+>> %OUTFILE% ECHO %MSG%
+"%MYSQLPATH%mysql" %OPTION% -h %HOST% %DB_NAME% -u %USER_ID% --local_infile=1 --show-warnings -vv -e"load data local infile '%filename_tmp%' IGNORE into table INAIN.AFE01_01 character set cp932 fields terminated by ',' ESCAPED BY '' lines terminated by '\r\n' (@1) SET DATA = @1; commit;" >>%OUTFILE% 2>&1
+IF NOT %ERRORLEVEL%==0 GOTO ERROR
+
+rem AFE01登録 =========================================================================
+SET MSG=%DATE% %TIME% TRUNCATE INAIN.AFE01
+ECHO %MSG%
+>> %OUTFILE% ECHO %MSG%
+"%MYSQLPATH%mysql" %OPTION% -h %HOST% %DB_NAME% -u %USER_ID% --show-warnings -vv -e"TRUNCATE TABLE INAIN.AFE01 ;commit;">>%OUTFILE% 2>&1
+IF NOT %ERRORLEVEL%==0 GOTO ERROR
+
+SET MSG=%DATE% %TIME% %INFILENAME% → INAIN.AFE01 LOAD処理
+ECHO %MSG%
+>> %OUTFILE% ECHO %MSG%
+"%MYSQLPATH%mysql" %OPTION% -h %HOST% %DB_NAME% -u %USER_ID% --show-warnings -vv -e "INSERT IGNORE INTO INAIN.AFE01 SELECT MID(DATA, 1, 6) AS SIIRCD, MID(DATA, 7, CHAR_LENGTH(SUBSTRING(DATA, 7)) - 6) AS SIREME, RIGHT (DATA, 6) AS DASIR FROM INAIN.AFE01_01;;commit;" >>%OUTFILE% 2>&1
+IF NOT %ERRORLEVEL%==0 GOTO ERROR
+
+SET MSG=%DATE% %TIME% INAIN.AFE01 → INAMS.MSTSIHARAI LOAD処理
+ECHO %MSG%
+>> %OUTFILE% ECHO %MSG%
+REM 支払先マスタの全件差替
+"%MYSQLPATH%mysql" %OPTION% -h %HOST% %DB_NAME% -u %USER_ID% --show-warnings -vv -e"TRUNCATE TABLE INAMS.MSTSIHARAI; INSERT INTO INAMS.MSTSIHARAI SELECT T1.SIIRCD, 'batch', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM (SELECT DISTINCT CAST(REPLACE (SIIRCD, ' ', '0') AS SIGNED) AS SIIRCD FROM INAIN.AFE01) T1;commit;" >>%OUTFILE% 2>&1
+IF NOT %ERRORLEVEL%==0 GOTO ERROR
+
+:FINAL
+EXIT /B 0
+
+:ERROR
+EXIT /B 1
