@@ -1,0 +1,44 @@
+REM [198][sysSZK]
+@ECHO OFF
+
+REM ログフォルダ作成
+IF NOT EXIST %~DP0..\logs MKDIR %~DP0..\logs
+
+REM コマンドフォルダ作成
+IF NOT EXIST %~DP0..\cmd MKDIR %~DP0..\cmd
+
+REM ログファイルの情報
+SET OUTFILE=%~DP0../logs/setup.log
+SET OUTTIME=%~DP0../logs/time.log
+
+REM ベースフォルダ
+SET BASEDIR=%~DP0..
+
+REM 更新対象の情報
+SET INFOSCRIPT=%~DP0..\cmd\%~N0.DB2
+
+SET OUTFILENAME=0198
+SET EXPFILE=%~DP0../exp/%OUTFILENAME%
+SET HULFTID=A11MTN02
+
+REM ===== HULFT SEND DELETE ===============
+SET HULFT=D:\HULFTFILES\SEND\%OUTFILENAME%
+DEL /Q %HULFT%\*
+
+SET MSG=%DATE% %TIME%  →  EXPORT処理(棚卸管理_所属)
+ECHO %MSG%
+ECHO %MSG% >> %OUTFILE%
+"%MYSQLPATH%mysql" %OPTION% -h %HOST% %DB_NAME% -u %USER_ID% -N -e "SELECT SZKCD, SZKAN, SZKKN, OPERATOR, DATE_FORMAT(ADDDT, '%%Y/%%m/%%d %%T'), DATE_FORMAT(UPDDT, '%%Y/%%m/%%d %%T') FROM INAAD.SYSSZK ORDER BY SZKCD" >%EXPFILE% 2>>%OUTFILE% 
+IF NOT %ERRORLEVEL%==0 GOTO ERROR
+
+REM ===== HULFT SEND MOVE =================
+ROBOCOPY %~dp0..\EXP %HULFT% %OUTFILENAME% /R:0 /NFL /NP >> %OUTFILE%
+
+REM ===== HULFT SEND =======================
+call %~dp0..\..\HULFT\.start_HULFT_SEND.bat %HULFTID% %OUTFILENAME%
+
+:FINAL
+EXIT /B 0
+
+:ERROR
+EXIT /B 1
